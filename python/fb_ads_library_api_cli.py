@@ -103,6 +103,7 @@ def validate_fields_param(fields_input):
         )
 
 
+
 def main():
     parser = get_parser()
     opts = parser.parse_args()
