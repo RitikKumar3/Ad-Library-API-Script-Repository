@@ -112,37 +112,56 @@ def main():
         print("At least one must be set: --search-term, --search-page-ids")
         sys.exit(1)
 
-    if not opts.search_term:
-        search_term = "."
+    if opts.search_term.startswith('@'):
+        # Read search terms from file
+        with open(opts.search_term[1:], 'r') as file:
+            search_terms = file.read().splitlines()
     else:
-        search_term = opts.search_term
-    api = FbAdsLibraryTraversal(
-        opts.access_token, opts.fields, search_term, opts.country
-    )
-    if opts.search_page_ids:
-        api.search_page_ids = opts.search_page_ids
-    if opts.ad_active_status:
-        api.ad_active_status = opts.ad_active_status
-    if opts.batch_size:
-        api.page_limit = opts.batch_size
-    if opts.retry_limit:
-        api.retry_limit = opts.retry_limit
-    if opts.after_date:
-        api.after_date = opts.after_date
-    generator_ad_archives = api.generate_ad_archives()
-    if opts.action in get_operators():
-        if opts.action == "save_to_csv":
-            save_to_csv(
-                generator_ad_archives, opts.args, opts.fields, is_verbose=opts.verbose
-            )
-        else:
-            get_operators()[opts.action](
-                generator_ad_archives, opts.args, is_verbose=opts.verbose
-            )
-    else:
-        print("Invalid 'action' value: %s" % opts.action)
-        sys.exit(1)
+        # Handle multiple search terms
+        search_terms = opts.search_term.split(",") if opts.search_term else ["."]
+    
+    search_page_ids = opts.search_page_ids.split(",") if opts.search_page_ids else []
 
+    for search_term in search_terms:
+        search_term = search_term.strip()
+        print(f"Processing search term: {search_term}")
+
+        all_results = []
+
+        for page_id in search_page_ids:
+            page_id = page_id.strip()
+            print(f"Using page ID: {page_id}")
+            
+            api = FbAdsLibraryTraversal(
+                opts.access_token, opts.fields, search_term, opts.country
+            )
+            if page_id:
+                api.search_page_ids = page_id
+            if opts.ad_active_status:
+                api.ad_active_status = opts.ad_active_status
+            if opts.batch_size:
+                api.page_limit = opts.batch_size
+            if opts.retry_limit:
+                api.retry_limit = opts.retry_limit
+            if opts.after_date:
+                api.after_date = opts.after_date
+            
+            generator_ad_archives = api.generate_ad_archives()
+            results = list(generator_ad_archives)
+            all_results.extend(results)
+        
+        if opts.action in get_operators():
+            if opts.action == "save_to_csv":
+                save_to_csv(
+                    all_results, opts.args, opts.fields, is_verbose=opts.verbose
+                )
+            else:
+                get_operators()[opts.action](
+                    all_results, opts.args, is_verbose=opts.verbose
+                )
+        else:
+            print("Invalid 'action' value: %s" % opts.action)
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
