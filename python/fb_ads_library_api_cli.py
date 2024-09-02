@@ -7,6 +7,7 @@
 
 import argparse
 import sys
+import csv
 
 from fb_ads_library_api import FbAdsLibraryTraversal
 from fb_ads_library_api_operators import get_operators, save_to_csv
@@ -102,7 +103,23 @@ def validate_fields_param(fields_input):
             "Unsupported fields: %s" % (",".join(invalid_fields))
         )
 
+def save_to_csv(results, args, fields, is_verbose=False):
+    # Define the order of columns, placing 'search_term' as the second column
+    ordered_fieldnames = [fields.split(",")[0], 'search_term'] + [field for field in fields.split(",")[1:]]
 
+    output_file = args[0] if args else "output.csv"
+
+    with open(output_file, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=ordered_fieldnames)
+
+        writer.writeheader()
+        for result in results:
+            # Write the row ensuring the correct order of columns
+            row = {key: result.get(key, "") for key in ordered_fieldnames}
+            writer.writerow(row)
+
+    if is_verbose:
+        print(f"Results saved to {output_file}")
 
 def main():
     parser = get_parser()
@@ -148,6 +165,11 @@ def main():
             
             generator_ad_archives = api.generate_ad_archives()
             results = list(generator_ad_archives)
+            
+            # Add the search term to each result
+            for result in results:
+                result['search_term'] = search_term  # Add the search term to each result
+
             all_results.extend(results)
         
         if opts.action in get_operators():
