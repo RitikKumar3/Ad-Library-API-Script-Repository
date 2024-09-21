@@ -133,3 +133,4 @@ class FbAdsLibraryTraversal:
         if we failed from error, later we can just continue from the last failure url
         """
         return cls._get_ad_archives_from_url(failure_url, after_date=after_date)
+
