@@ -7,7 +7,6 @@
 
 import argparse
 import sys
-import csv
 
 from fb_ads_library_api import FbAdsLibraryTraversal
 from fb_ads_library_api_operators import get_operators, save_to_csv
@@ -31,7 +30,7 @@ def get_parser():
         required=True,
         type=validate_fields_param,
     )
-    parser.add_argument("-s", "--search-term", help="The term you want to search for")
+    parser.add_argument("-s", "--search-terms", help="Multiple search terms separated by commas")
     parser.add_argument(
         "-c",
         "--country",
@@ -103,23 +102,6 @@ def validate_fields_param(fields_input):
             "Unsupported fields: %s" % (",".join(invalid_fields))
         )
 
-def save_to_csv(results, args, fields, is_verbose=False):
-    # Define the order of columns, placing 'search_term' as the second column
-    ordered_fieldnames = [fields.split(",")[0], 'search_term'] + [field for field in fields.split(",")[1:]]
-
-    output_file = args[0] if args else "output.csv"
-
-    with open(output_file, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=ordered_fieldnames)
-
-        writer.writeheader()
-        for result in results:
-            # Write the row ensuring the correct order of columns
-            row = {key: result.get(key, "") for key in ordered_fieldnames}
-            writer.writerow(row)
-
-    if is_verbose:
-        print(f"Results saved to {output_file}")
 
 def main():
     parser = get_parser()
@@ -129,61 +111,46 @@ def main():
         print("At least one must be set: --search-term, --search-page-ids")
         sys.exit(1)
 
-    if opts.search_term.startswith('@'):
-        # Read search terms from file
-        with open(opts.search_term[1:], 'r') as file:
-            search_terms = file.read().splitlines()
-    else:
-        # Handle multiple search terms
-        search_terms = opts.search_term.split(",") if opts.search_term else ["."]
-    
-    search_page_ids = opts.search_page_ids.split(",") if opts.search_page_ids else []
+    search_terms = opts.search_terms.split(",") if opts.search_terms else [""]  # Split the search terms by commas
+    fields = "search_term," + opts.fields
+    all_results = []
 
     for search_term in search_terms:
         search_term = search_term.strip()
-        print(f"Processing search term: {search_term}")
+        api = FbAdsLibraryTraversal(
+            opts.access_token, fields, search_term, opts.country
+        )
+        if opts.search_page_ids:
+            api.search_page_ids = opts.search_page_ids
+        if opts.ad_active_status:
+            api.ad_active_status = opts.ad_active_status
+        if opts.batch_size:
+            api.page_limit = opts.batch_size
+        if opts.retry_limit:
+            api.retry_limit = opts.retry_limit
+        if opts.after_date:
+            api.after_date = opts.after_date
+        generator_ad_archives = api.generate_ad_archives()
 
-        all_results = []
+        for ad_archives in generator_ad_archives:
+            for ad in ad_archives:
+                ad['search_term'] = search_term  # Add the search term to the ad data
+                all_results.append(ad)
 
-        for page_id in search_page_ids:
-            page_id = page_id.strip()
-            print(f"Using page ID: {page_id}")
-            
-            api = FbAdsLibraryTraversal(
-                opts.access_token, opts.fields, search_term, opts.country
+    if opts.action in get_operators():
+        if opts.action == "save_to_csv":
+            save_to_csv(
+                all_results, opts.args, fields, is_verbose=opts.verbose
             )
-            if page_id:
-                api.search_page_ids = page_id
-            if opts.ad_active_status:
-                api.ad_active_status = opts.ad_active_status
-            if opts.batch_size:
-                api.page_limit = opts.batch_size
-            if opts.retry_limit:
-                api.retry_limit = opts.retry_limit
-            if opts.after_date:
-                api.after_date = opts.after_date
-            
-            generator_ad_archives = api.generate_ad_archives()
-            results = list(generator_ad_archives)
-            
-            # Add the search term to each result
-            for result in results:
-                result['search_term'] = search_term  # Add the search term to each result
-
-            all_results.extend(results)
-        
-        if opts.action in get_operators():
-            if opts.action == "save_to_csv":
-                save_to_csv(
-                    all_results, opts.args, opts.fields, is_verbose=opts.verbose
-                )
-            else:
-                get_operators()[opts.action](
-                    all_results, opts.args, is_verbose=opts.verbose
-                )
         else:
-            print("Invalid 'action' value: %s" % opts.action)
-            sys.exit(1)
+            get_operators()[opts.action](
+                all_results, opts.args, is_verbose=opts.verbose
+            )
+    else:
+        print("Invalid 'action' value: %s" % opts.action)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
+

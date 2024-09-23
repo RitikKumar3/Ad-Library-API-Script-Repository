@@ -59,7 +59,7 @@ def save_to_file(generator_ad_archives, args, is_verbose=False):
     print("Total number of ads wrote: %d" % count)
 
 
-def save_to_csv(generator_ad_archives, args, fields, is_verbose=False):
+def save_to_csv(generator_ad_archives, args, fields, search_term, is_verbose=False):
     """
     Save all retrieved ad_archives to the output file. Each ad_archive will be
     stored as a row in the CSV
@@ -69,7 +69,7 @@ def save_to_csv(generator_ad_archives, args, fields, is_verbose=False):
 
     delimiter = ","
     total_count = 0
-    output = fields + "\n"
+    output = "search_term," + fields + "\n"
     output_file = args[0]
 
     for ad_archives in generator_ad_archives:
@@ -77,6 +77,7 @@ def save_to_csv(generator_ad_archives, args, fields, is_verbose=False):
         if is_verbose:
             print("Items processed: %d" % total_count)
         for ad_archive in ad_archives:
+            row = [search_term]
             for field in list(fields.split(delimiter)):
                 if field in ad_archive:
                     value = ad_archive[field]
@@ -86,14 +87,12 @@ def save_to_csv(generator_ad_archives, args, fields, is_verbose=False):
                         value = json.dumps(value)
                     elif type(value) == list:
                         value = delimiter.join(value)
-                    output += (
-                        '"' + value.replace("\n", "").replace('"', "") + '"' + delimiter
-                    )
+                    row.append('"' + str(value).replace("\n", "").replace('"', "") + '"')
                 else:
-                    output += delimiter
-            output = output.rstrip(",") + "\n"
+                    row.append("")
+            output += delimiter.join(row) + "\n"
 
-    with open(output_file, "w") as csvfile:
+    with open(output_file, "w", encoding="utf-8") as csvfile:
         csvfile.write(output)
 
     print("Successfully wrote data to file: %s" % output_file)
@@ -131,3 +130,4 @@ def count_start_time_trending(generator_ad_archives, args, is_verbose=False):
             csvfile.write("{}, {}\n".format(date, date_to_count[date]))
 
     print("Successfully wrote data to file: %s" % output_file)
+

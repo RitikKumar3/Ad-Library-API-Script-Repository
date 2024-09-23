@@ -32,7 +32,7 @@ class FbAdsLibraryTraversal:
         self,
         access_token,
         fields,
-        search_term,
+        search_terms,
         country,
         search_page_ids="",
         ad_active_status="ALL",
@@ -44,7 +44,7 @@ class FbAdsLibraryTraversal:
         self.page_count = 0
         self.access_token = access_token
         self.fields = fields
-        self.search_term = search_term
+        self.search_terms = search_terms
         self.country = country
         self.after_date = after_date
         self.search_page_ids = search_page_ids
@@ -57,19 +57,25 @@ class FbAdsLibraryTraversal:
             self.api_version = api_version
 
     def generate_ad_archives(self):
-        next_page_url = self.default_url_pattern.format(
-            self.api_version,
-            self.access_token,
-            self.fields,
-            self.search_term,
-            self.country,
-            self.search_page_ids,
-            self.ad_active_status,
-            self.page_limit,
-        )
-        return self.__class__._get_ad_archives_from_url(
-            next_page_url, after_date=self.after_date, retry_limit=self.retry_limit
-        )
+        all_results = []
+        for search_term in self.search_terms:
+            next_page_url = self.default_url_pattern.format(
+                self.api_version,
+                self.access_token,
+                self.fields,
+                search_term,
+                self.country,
+                self.search_page_ids,
+                self.ad_active_status,
+                self.page_limit,
+            )
+            results = list(
+                self.__class__._get_ad_archives_from_url(
+                    next_page_url, after_date=self.after_date, retry_limit=self.retry_limit
+                )
+            )
+            all_results.extend(results)
+        return all_results
 
     @staticmethod
     def _get_ad_archives_from_url(
@@ -77,8 +83,8 @@ class FbAdsLibraryTraversal:
     ):
         last_error_url = None
         last_retry_count = 0
+        print(f"Filtering ads starting after: {after_date}")
         start_time_cutoff_after = datetime.strptime(after_date, "%Y-%m-%d").timestamp()
-
         while next_page_url is not None:
             response = requests.get(next_page_url)
             response_data = json.loads(response.text)
@@ -109,6 +115,7 @@ class FbAdsLibraryTraversal:
                     response_data["data"],
                 )
             )
+            
             if len(filtered) == 0:
                 # if no data after the after_date, break
                 next_page_url = None
@@ -126,3 +133,4 @@ class FbAdsLibraryTraversal:
         if we failed from error, later we can just continue from the last failure url
         """
         return cls._get_ad_archives_from_url(failure_url, after_date=after_date)
+
